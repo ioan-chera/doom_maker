@@ -1,5 +1,5 @@
 name: doom_maker
-description: "A new Flutter project."
+description: "DOOM WAD editor."
 
 # Prevent accidental publishing to pub.dev.
 publish_to: 'none'
