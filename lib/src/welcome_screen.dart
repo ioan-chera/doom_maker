@@ -2,6 +2,7 @@ import 'map_editor_view.dart';
 
 import '../l10n/app_localizations.dart';
 
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -29,18 +30,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         type: FileType.custom,
         allowedExtensions: ['wad'],
       );
-      if(result != null && result.files.single.bytes != null) {
-        Uint8List bytes = result.files.single.bytes!;
-        String name = result.files.single.name;
-        if(mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => MapEditorView(
-                fileData: bytes,
-                fileName: name,
+      if(result != null) {
+        String? path = result.files.single.path;
+        if(path != null) {
+          File file = File(path);
+          Uint8List bytes = await file.readAsBytes();
+          String name = result.files.single.name;
+          if(mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => MapEditorView(
+                  fileData: bytes,
+                  fileName: name,
+                )
               )
-            )
-          );
+            );
+          }
         }
       }
     } catch(e) {
