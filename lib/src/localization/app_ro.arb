@@ -7,11 +7,11 @@
   "@welcomeTitle": {
     "description": "Welcome screen title"
   },
-  "loadWadFile": "Încarcă un fișier WAD",
+  "loadWadFile": "Încărcați un fișier WAD",
   "@loadWadFile": {
     "description": "Instruction text for loading WAD files"
   },
-  "loadFile": "Încarcă fișier",
+  "loadFile": "Încărcați fișier",
   "@loadFile": {
     "description": "Button text to load a file"
   },

@@ -52,7 +52,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if(mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading file: $e'),
+            content: Text(AppLocalizations.of(context)!.errorLoadingFile(e.toString())),
             backgroundColor: Colors.red,
           )
         );
@@ -80,13 +80,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Welcome to DoomMaker',
+                AppLocalizations.of(context)!.welcomeTitle,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               Text(
-                'Load a WAD file',
+                AppLocalizations.of(context)!.loadWadFile,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
@@ -106,7 +106,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     )
                     : const Icon(Icons.folder_open),
-                    label: Text(_isLoading ? 'Loading...' : 'Load File'),
+                    label: Text(_isLoading ? AppLocalizations.of(context)!.loading : AppLocalizations.of(context)!.loadFile),
                     style: ElevatedButton.styleFrom(textStyle: const TextStyle(fontSize: 16))
                 )
               )

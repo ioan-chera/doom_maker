@@ -15,10 +15,10 @@ class AppLocalizationsRo extends AppLocalizations {
   String get welcomeTitle => 'Bine ați venit în DoomMaker';
 
   @override
-  String get loadWadFile => 'Încarcă un fișier WAD';
+  String get loadWadFile => 'Încărcați un fișier WAD';
 
   @override
-  String get loadFile => 'Încarcă fișier';
+  String get loadFile => 'Încărcați fișier';
 
   @override
   String get loading => 'Se încarcă...';
