@@ -3,23 +3,23 @@
   "@appTitle": {
     "description": "Doom Maker"
   },
-  "welcomeTitle": "Welcome to DoomMaker",
+  "welcomeTitle": "Bine ați venit în DoomMaker",
   "@welcomeTitle": {
     "description": "Welcome screen title"
   },
-  "loadWadFile": "Load a WAD file",
+  "loadWadFile": "Încarcă un fișier WAD",
   "@loadWadFile": {
     "description": "Instruction text for loading WAD files"
   },
-  "loadFile": "Load File",
+  "loadFile": "Încarcă fișier",
   "@loadFile": {
     "description": "Button text to load a file"
   },
-  "loading": "Loading...",
+  "loading": "Se încarcă...",
   "@loading": {
     "description": "Loading state text"
   },
-  "errorLoadingFile": "Error loading file: {error}",
+  "errorLoadingFile": "Eroare încărcare fișier: {error}",
   "@errorLoadingFile": {
     "description": "Error message when file loading fails",
     "placeholders": {

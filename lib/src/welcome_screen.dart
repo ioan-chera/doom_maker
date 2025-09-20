@@ -1,8 +1,16 @@
+import 'map_editor_view.dart';
+
+import '../l10n/app_localizations.dart';
+
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({ super.key });
+
+  static const routeName = '/';
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -16,7 +24,91 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       _isLoading = true;
     });
     try {
-      // TODO
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: FileType.custom,
+        allowedExtensions: ['wad'],
+      );
+      if(result != null && result.files.single.bytes != null) {
+        Uint8List bytes = result.files.single.bytes!;
+        String name = result.files.single.name;
+        if(mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => MapEditorView(
+                fileData: bytes,
+                fileName: name,
+              )
+            )
+          );
+        }
+      }
+    } catch(e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading file: $e'),
+            backgroundColor: Colors.red,
+          )
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.map,
+                size: 80,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Welcome to DoomMaker',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Load a WAD file',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
+              SizedBox(
+                width: 200,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _loadFile,
+                  icon: _isLoading
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20, 
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                    : const Icon(Icons.folder_open),
+                    label: Text(_isLoading ? 'Loading...' : 'Load File'),
+                    style: ElevatedButton.styleFrom(textStyle: const TextStyle(fontSize: 16))
+                )
+              )
+            ],
+          )
+        )
+      )
+    );
   }
 }
