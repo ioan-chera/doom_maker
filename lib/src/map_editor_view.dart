@@ -29,11 +29,7 @@ class _MapEditorViewState extends State<MapEditorView> {
         title: Text('Editing: ${widget.fileName}'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-            );
-          },
+          onPressed: () { Navigator.of(context).pop(); },
         ),
         actions: [
           IconButton(
