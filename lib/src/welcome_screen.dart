@@ -37,7 +37,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Uint8List bytes = await file.readAsBytes();
           String name = result.files.single.name;
           if(mounted) {
-            Navigator.of(context).pushReplacement(
+            Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => MapEditorView(
                   fileData: bytes,
@@ -84,15 +84,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
-              Text(
-                AppLocalizations.of(context)!.loadWadFile,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
               const SizedBox(height: 48),
               SizedBox(
-                width: 200,
+                width: 240,
                 height: 50,
                 child: ElevatedButton.icon(
                   onPressed: _isLoading ? null : _loadFile,
@@ -106,7 +100,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     )
                     : const Icon(Icons.folder_open),
-                    label: Text(_isLoading ? AppLocalizations.of(context)!.loading : AppLocalizations.of(context)!.loadFile),
+                    label: Text(_isLoading ? AppLocalizations.of(context)!.loading : AppLocalizations.of(context)!.loadWadFile),
                     style: ElevatedButton.styleFrom(textStyle: const TextStyle(fontSize: 16))
                 )
               )

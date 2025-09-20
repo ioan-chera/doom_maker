@@ -11,10 +11,6 @@
   "@loadWadFile": {
     "description": "Instruction text for loading WAD files"
   },
-  "loadFile": "Load File",
-  "@loadFile": {
-    "description": "Button text to load a file"
-  },
   "loading": "Loading...",
   "@loading": {
     "description": "Loading state text"

@@ -12,13 +12,10 @@ class AppLocalizationsRo extends AppLocalizations {
   String get appTitle => 'doom_maker';
 
   @override
-  String get welcomeTitle => 'Bine ați venit în DoomMaker';
+  String get welcomeTitle => 'Bine ați venit la DoomMaker';
 
   @override
   String get loadWadFile => 'Încărcați un fișier WAD';
-
-  @override
-  String get loadFile => 'Încărcați fișier';
 
   @override
   String get loading => 'Se încarcă...';

@@ -116,12 +116,6 @@ abstract class AppLocalizations {
   /// **'Load a WAD file'**
   String get loadWadFile;
 
-  /// Button text to load a file
-  ///
-  /// In en, this message translates to:
-  /// **'Load File'**
-  String get loadFile;
-
   /// Loading state text
   ///
   /// In en, this message translates to:

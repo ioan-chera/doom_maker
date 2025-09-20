@@ -18,9 +18,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadWadFile => 'Load a WAD file';
 
   @override
-  String get loadFile => 'Load File';
-
-  @override
   String get loading => 'Loading...';
 
   @override
