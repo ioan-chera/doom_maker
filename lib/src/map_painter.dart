@@ -44,20 +44,6 @@ class MapPainter extends CustomPainter {
       radius,
       filePaint,
     );
-
-    TextPainter textPainter = TextPainter(
-      text: TextSpan(
-        text: 'File: $fileName\nSize: ${fileData.length} bytes',
-        style: const TextStyle(
-          color: Colors.black,
-          fontSize: 16,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-
-    textPainter.layout();
-    textPainter.paint(canvas, const Offset(10, 10));
   }
 
   @override

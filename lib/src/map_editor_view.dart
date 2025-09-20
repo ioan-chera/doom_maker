@@ -26,12 +26,23 @@ class _MapEditorViewState extends State<MapEditorView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Editing: ${widget.fileName}'),
+        title: Text(widget.fileName),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () { Navigator.of(context).pop(); },
+          tooltip: 'Back',
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            onPressed: () {},
+            tooltip: 'Open',
+          ),
+          IconButton(
+            icon: const Icon(Icons.save_alt),
+            onPressed: () {},
+            tooltip: 'Save',
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () {
