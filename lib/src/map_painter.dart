@@ -1,11 +1,12 @@
+import 'doom_level/level.dart';
+
 import 'package:flutter/material.dart';
 
-
 class MapPainter extends CustomPainter {
-  final String fileName;
+  final Level level;
 
   MapPainter({
-    required this.fileName,
+    required this.level,
   });
 
   @override
@@ -37,4 +38,6 @@ class MapPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return false;
   }
+
 }
+

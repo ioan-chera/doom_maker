@@ -1,10 +1,6 @@
 import 'dart:typed_data';
 import '../wad_data.dart';
-import 'linedef.dart';
-import 'sector.dart';
-import 'sidedef.dart';
-import 'thing.dart';
-import 'vertex.dart';
+import 'element.dart';
 
 class Level {
   var things = <Thing>[];
@@ -27,14 +23,12 @@ class Level {
     }
 
     _loadThings(wadData, levelIndex + 1);
-    _loadLinedefs(wadData, levelIndex + 2);
-    _loadSidedefs(wadData, levelIndex + 3);
     _loadVertices(wadData, levelIndex + 4);
     _loadSectors(wadData, levelIndex + 8);
-
+    _loadSidedefs(wadData, levelIndex + 3);
+    _loadLinedefs(wadData, levelIndex + 2);
+  
     _cleanupUnusedVertices();
-
-
   }
 
   void _loadThings(WadData wadData, int lumpIndex) {
@@ -57,55 +51,6 @@ class Level {
         ..type = byteData.getInt16(i + 6, Endian.little)
         ..flags = byteData.getInt16(i + 8, Endian.little);
       things.add(thing);
-    }
-  }
-
-  void _loadLinedefs(WadData wadData, int lumpIndex) {
-    if (lumpIndex >= wadData.lumps.length) {
-      return;
-    }
-    final lump = wadData.lumps[lumpIndex];
-    if (lump.name != 'LINEDEFS') {
-      return;
-    }
-
-    final data = lump.data;
-    final byteData = ByteData.sublistView(data);
-
-    for (int i = 0; i + 14 <= data.length; i += 14) {
-      final linedef = Linedef()
-        ..v1 = byteData.getInt16(i, Endian.little)
-        ..v2 = byteData.getInt16(i + 2, Endian.little)
-        ..flags = byteData.getInt16(i + 4, Endian.little)
-        ..special = byteData.getInt16(i + 6, Endian.little)
-        ..tag = byteData.getInt16(i + 8, Endian.little)
-        ..s1 = byteData.getInt16(i + 10, Endian.little)
-        ..s2 = byteData.getInt16(i + 12, Endian.little);
-      linedefs.add(linedef);
-    }
-  }
-
-  void _loadSidedefs(WadData wadData, int lumpIndex) {
-    if (lumpIndex >= wadData.lumps.length) {
-      return;
-    }
-    final lump = wadData.lumps[lumpIndex];
-    if (lump.name != 'SIDEDEFS') {
-      return;
-    }
-
-    final data = lump.data;
-    final byteData = ByteData.sublistView(data);
-
-    for (int i = 0; i + 30 <= data.length; i += 30) {
-      final sidedef = Sidedef()
-        ..xOffset = byteData.getInt16(i, Endian.little)
-        ..yOffset = byteData.getInt16(i + 2, Endian.little)
-        ..upperTexture = _readTextureName(data, i + 4)
-        ..lowerTexture = _readTextureName(data, i + 12)
-        ..middleTexture = _readTextureName(data, i + 20)
-        ..sectorID = byteData.getInt16(i + 28, Endian.little);
-      sidedefs.add(sidedef);
     }
   }
 
@@ -154,6 +99,68 @@ class Level {
     }
   }
 
+  void _loadSidedefs(WadData wadData, int lumpIndex) {
+    if (lumpIndex >= wadData.lumps.length) {
+      return;
+    }
+    final lump = wadData.lumps[lumpIndex];
+    if (lump.name != 'SIDEDEFS') {
+      return;
+    }
+
+    final data = lump.data;
+    final byteData = ByteData.sublistView(data);
+
+    for (int i = 0; i + 30 <= data.length; i += 30) {
+      final sectorID = byteData.getInt16(i + 28, Endian.little);
+      if(sectorID < 0 || sectorID >= sectors.length) {
+        continue;
+      }
+      final sidedef = Sidedef(sector: sectors[sectorID])
+        ..xOffset = byteData.getInt16(i, Endian.little)
+        ..yOffset = byteData.getInt16(i + 2, Endian.little)
+        ..upperTexture = _readTextureName(data, i + 4)
+        ..lowerTexture = _readTextureName(data, i + 12)
+        ..middleTexture = _readTextureName(data, i + 20);
+      sidedefs.add(sidedef);
+    }
+  }
+
+  void _loadLinedefs(WadData wadData, int lumpIndex) {
+    if (lumpIndex >= wadData.lumps.length) {
+      return;
+    }
+    final lump = wadData.lumps[lumpIndex];
+    if (lump.name != 'LINEDEFS') {
+      return;
+    }
+
+    final data = lump.data;
+    final byteData = ByteData.sublistView(data);
+
+    for (int i = 0; i + 14 <= data.length; i += 14) {
+      final vertex1ID = byteData.getInt16(i, Endian.little);
+      final vertex2ID = byteData.getInt16(i + 2, Endian.little);
+      if(vertex1ID < 0 || vertex1ID >= vertices.length || vertex2ID < 0 || vertex2ID >= vertices.length) {
+        continue;
+      }
+      final linedef = Linedef(vertex1: vertices[vertex1ID], vertex2: vertices[vertex2ID])
+        ..flags = byteData.getInt16(i + 4, Endian.little)
+        ..special = byteData.getInt16(i + 6, Endian.little)
+        ..tag = byteData.getInt16(i + 8, Endian.little);
+
+      final side1ID = byteData.getInt16(i + 10, Endian.little);
+      final side2ID = byteData.getInt16(i + 12, Endian.little);
+      if(side1ID >= 0 && side1ID < sidedefs.length) {
+        linedef.sidedef1 = sidedefs[side1ID];
+      }
+      if(side2ID >= 0 && side2ID < sidedefs.length) {
+        linedef.sidedef2 = sidedefs[side2ID];
+      }
+      linedefs.add(linedef);
+    }
+  }
+
   String _readTextureName(Uint8List data, int offset) {
     final nameBytes = data.sublist(offset, offset + 8);
     final nullIndex = nameBytes.indexOf(0);
@@ -162,18 +169,8 @@ class Level {
   }
 
   void _cleanupUnusedVertices() {
-    var used = List<bool>.filled(vertices.length, false);
-    for(final linedef in linedefs) {
-      if(linedef.v1 >= 0 && linedef.v1 < vertices.length) {
-        used[linedef.v1] = true;
-      }
-      if(linedef.v2 >= 0 && linedef.v2 < vertices.length) {
-        used[linedef.v2] = true;
-      }
-    }
-
     for (int i = vertices.length - 1; i >= 0; i--) {
-      if (used[i]) {
+      if (vertices[i].linedefs.isNotEmpty) {
         break;
       }
 
