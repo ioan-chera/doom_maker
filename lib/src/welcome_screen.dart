@@ -30,12 +30,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if(result != null) {
         String? path = result.files.single.path;
         if(path != null) {
-          String name = result.files.single.name;
           if(mounted) {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => MapEditorView(
-                  fileName: name,
+                  filePath: path,
                 )
               )
             );

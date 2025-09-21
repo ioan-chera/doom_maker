@@ -3,13 +3,13 @@ import 'map_painter.dart';
 import 'package:flutter/material.dart';
 
 class MapEditorView extends StatefulWidget {
-  final String fileName;
+  final String? filePath;
 
   static const routeName = '/map';
 
   const MapEditorView({
     super.key,
-    required this.fileName,
+    this.filePath,
   });
 
   @override
@@ -21,7 +21,7 @@ class _MapEditorViewState extends State<MapEditorView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.fileName),
+        title: Text(widget.filePath ?? "untitled"),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () { Navigator.of(context).pop(); },
@@ -49,7 +49,7 @@ class _MapEditorViewState extends State<MapEditorView> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('File: ${widget.fileName}'),
+                      Text('File: ${widget.filePath ?? 'untitled'}'),
                     ],
                   ),
                   actions: [
@@ -70,7 +70,7 @@ class _MapEditorViewState extends State<MapEditorView> {
         maxScale: 10.0,
         child: CustomPaint(
           painter: MapPainter(
-            fileName: widget.fileName,
+            fileName: widget.filePath ?? 'untitled',
           ),
           child: SizedBox(
             width: double.infinity,
