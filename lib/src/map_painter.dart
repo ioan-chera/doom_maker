@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 
 
 class MapPainter extends CustomPainter {
-  final Uint8List fileData;
   final String fileName;
 
   MapPainter({
-    required this.fileData,
     required this.fileName,
   });
 
@@ -34,16 +32,6 @@ class MapPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    Paint filePaint = Paint()
-      ..color = Colors.blue.withValues(alpha: 0.3)
-      ..style = PaintingStyle.fill;
-
-    double radius = (fileData.length / 1000).clamp(10.0, 100.0);
-    canvas.drawCircle(
-      Offset(size.width / 2, size.height / 2),
-      radius,
-      filePaint,
-    );
   }
 
   @override

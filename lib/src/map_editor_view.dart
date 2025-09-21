@@ -1,19 +1,14 @@
 import 'map_painter.dart';
-import 'welcome_screen.dart';
-
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 class MapEditorView extends StatefulWidget {
-  final Uint8List fileData;
   final String fileName;
 
   static const routeName = '/map';
 
   const MapEditorView({
     super.key,
-    required this.fileData,
     required this.fileName,
   });
 
@@ -55,7 +50,6 @@ class _MapEditorViewState extends State<MapEditorView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('File: ${widget.fileName}'),
-                      Text('Size: ${widget.fileData.length} bytes'),
                     ],
                   ),
                   actions: [
@@ -76,7 +70,6 @@ class _MapEditorViewState extends State<MapEditorView> {
         maxScale: 10.0,
         child: CustomPaint(
           painter: MapPainter(
-            fileData: widget.fileData,
             fileName: widget.fileName,
           ),
           child: SizedBox(
