@@ -25,11 +25,7 @@ class _MapEditorViewState extends State<MapEditorView> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.filePath ?? "untitled"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () { Navigator.of(context).pop(); },
-          tooltip: 'Back',
-        ),
+        // TODO: possibly leading
         actions: [
           IconButton(
             icon: const Icon(Icons.folder_open),
