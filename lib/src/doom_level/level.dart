@@ -31,6 +31,10 @@ class Level {
     _loadSidedefs(wadData, levelIndex + 3);
     _loadVertices(wadData, levelIndex + 4);
     _loadSectors(wadData, levelIndex + 8);
+
+    _cleanupUnusedVertices();
+
+
   }
 
   void _loadThings(WadData wadData, int lumpIndex) {
@@ -155,5 +159,25 @@ class Level {
     final nullIndex = nameBytes.indexOf(0);
     final actualNameBytes = nullIndex >= 0 ? nameBytes.sublist(0, nullIndex) : nameBytes;
     return String.fromCharCodes(actualNameBytes);
+  }
+
+  void _cleanupUnusedVertices() {
+    var used = List<bool>.filled(vertices.length, false);
+    for(final linedef in linedefs) {
+      if(linedef.v1 >= 0 && linedef.v1 < vertices.length) {
+        used[linedef.v1] = true;
+      }
+      if(linedef.v2 >= 0 && linedef.v2 < vertices.length) {
+        used[linedef.v2] = true;
+      }
+    }
+
+    for (int i = vertices.length - 1; i >= 0; i--) {
+      if (used[i]) {
+        break;
+      }
+
+      vertices.removeAt(i);
+    }
   }
 }
