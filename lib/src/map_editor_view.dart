@@ -1,15 +1,18 @@
+import 'doom_level/level.dart';
 import 'map_painter.dart';
 
 import 'package:flutter/material.dart';
 
 class MapEditorView extends StatefulWidget {
   final String? filePath;
+  final Level level;
 
   static const routeName = '/map';
 
   const MapEditorView({
     super.key,
     this.filePath,
+    required this.level,
   });
 
   @override

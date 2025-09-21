@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 class WadLump {
@@ -89,6 +90,12 @@ class WadData {
       type: wadType,
       lumps: lumps,
     );
+  }
+
+  static WadData fromFile(String filePath) {
+    final file = File(filePath);
+    final bytes = file.readAsBytesSync();
+    return fromBytes(bytes);
   }
 
   WadLump? getLump(String name) {

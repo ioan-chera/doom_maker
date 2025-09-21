@@ -1,4 +1,6 @@
+import 'doom_level/level.dart';
 import 'map_editor_view.dart';
+import 'wad_data.dart';
 
 import '../l10n/app_localizations.dart';
 
@@ -35,6 +37,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               MaterialPageRoute(
                 builder: (context) => MapEditorView(
                   filePath: path,
+                  level: Level.fromWad(WadData.fromFile(path), 'MAP01')
                 )
               )
             );
