@@ -68,8 +68,8 @@ class Level {
 
     for (int i = 0; i + 4 <= data.length; i += 4) {
       final vertex = Vertex()
-        ..x = byteData.getInt16(i, Endian.little)
-        ..y = byteData.getInt16(i + 2, Endian.little);
+        ..x = byteData.getInt16(i, Endian.little) as double
+        ..y = byteData.getInt16(i + 2, Endian.little) as double;
       vertices.add(vertex);
     }
   }
