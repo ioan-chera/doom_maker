@@ -30,9 +30,11 @@
 //
 
 import 'dart:math';
+import 'dart:typed_data';
 
-import '../level.dart';
-import '../element.dart';
+import 'level.dart';
+import 'element.dart';
+import '../wad_data.dart';
 
 // this value is a trade-off.  lower values will build nodes faster,
 // but higher values allow picking better BSP partitions (and hence
@@ -41,6 +43,155 @@ const fastThreshold = 128;
 const distEpsilon = 1.0 / 64;
 const splitCost = 11;
 const subsectorMark = 32768;
+
+class BSP {
+  void loadFromWad(WadData wadData, int levelIndex, Level level) {
+    _loadNodes(wadData, levelIndex + 7);
+    _loadSegs(wadData, levelIndex + 5, level);
+    _loadSubsectors(wadData, levelIndex + 6);
+  }
+
+  void takeBSPVertices(Level level) {
+    int lastUsedVertexIndex = -1;
+    for(int i = level.vertices.length - 1; i >= 0; i--) {
+      if(level.vertices[i].linedefs.isNotEmpty) {
+        lastUsedVertexIndex = i;
+        break;
+      }
+    }
+
+    if(lastUsedVertexIndex + 1 < level.vertices.length) {
+      vertices.addAll(level.vertices.sublist(lastUsedVertexIndex + 1));
+      level.vertices.length = lastUsedVertexIndex + 1;
+    }
+  }
+
+  Sector sectorAtPoint(double x, double y) {
+    // TODO: traverse BSP to find the sector
+  }
+
+  void _finalizeBuilding() {
+    segs.clear();
+    for(final seg in _segsBuilding) {
+      segs.add(seg!);
+    }
+    _segsBuilding.clear();
+
+    subsectors.clear();
+    for(final subsector in _subsectorsBuilding) {
+      subsectors.add(subsector!);
+    }
+    _subsectorsBuilding.clear();
+  }
+
+  void _loadNodes(WadData wadData, int lumpIndex) {
+    if(lumpIndex >= wadData.lumps.length) {
+      return;
+    }
+    final lump = wadData.lumps[lumpIndex];
+    if (lump.name != 'NODES') {
+      return;
+    }
+
+    final data = lump.data;
+    final byteData = ByteData.sublistView(data);
+
+    for(int i = 0; i + 28 <= data.length; i += 28) {
+      final node = Node();
+      node.x = byteData.getInt16(i, Endian.little) as double;
+      node.y = byteData.getInt16(i + 2, Endian.little) as double;
+      node.dx = byteData.getInt16(i + 4, Endian.little) as double;
+      node.dy = byteData.getInt16(i + 6, Endian.little) as double;
+      node.bbox = [BBox(), BBox()];
+      node.bbox[0].top = byteData.getInt16(i + 8, Endian.little) as double;
+      node.bbox[0].bottom = byteData.getInt16(i + 10, Endian.little) as double;
+      node.bbox[0].left = byteData.getInt16(i + 12, Endian.little) as double;
+      node.bbox[0].right = byteData.getInt16(i + 14, Endian.little) as double;
+      node.bbox[1].top = byteData.getInt16(i + 16, Endian.little) as double;
+      node.bbox[1].bottom = byteData.getInt16(i + 18, Endian.little) as double;
+      node.bbox[1].left = byteData.getInt16(i + 20, Endian.little) as double;
+      node.bbox[1].right = byteData.getInt16(i + 22, Endian.little) as double;
+      node.children = [
+        byteData.getInt16(i + 24, Endian.little),
+        byteData.getInt16(i + 26, Endian.little),
+      ];
+      nodes.add(node);
+    }
+  }
+
+  void _loadSubsectors(WadData wadData, int lumpIndex) {
+    if(lumpIndex >= wadData.lumps.length) {
+      return;
+    }
+    final lump = wadData.lumps[lumpIndex];
+    if (lump.name != 'SSECTORS') {
+      return;
+    }
+
+    final data = lump.data;
+    final byteData = ByteData.sublistView(data);
+
+    for(int i = 0; i + 4 <= data.length; i += 4) {
+      final segIndex = byteData.getInt16(i + 2, Endian.little);
+      final numLines = byteData.getInt16(i, Endian.little);
+      if(segIndex < 0 || segIndex >= segs.length || segIndex + numLines > segs.length) {
+        continue;
+      }
+      final subsector = Subsector(firstline: segs[segIndex]);
+      subsector.numlines = byteData.getInt16(i, Endian.little);
+      subsectors.add(subsector);
+    }
+  }
+
+  void _loadSegs(WadData wadData, int lumpIndex, Level level) {
+    if(lumpIndex >= wadData.lumps.length) {
+      return;
+    }
+    final lump = wadData.lumps[lumpIndex];
+    if (lump.name != 'SEGS') {
+      return;
+    }
+
+    final data = lump.data;
+    final byteData = ByteData.sublistView(data);
+    for(int i = 0; i + 12 <= data.length; i += 12) {
+      final v1index = byteData.getInt16(i, Endian.little);
+      final v2index = byteData.getInt16(i + 2, Endian.little);
+      final lineindex = byteData.getInt16(i + 6, Endian.little);
+      final direction = byteData.getInt16(i + 8, Endian.little);
+      if(v1index < 0 || v1index >= level.vertices.length ||
+         v2index < 0 || v2index >= level.vertices.length ||
+         lineindex < 0 || lineindex >= level.vertices.length) 
+      {
+        continue;
+      }
+      final linedef = level.linedefs[lineindex];
+      final sidedef = direction == 0 ? linedef.sidedef1 : linedef.sidedef2;
+      if(sidedef == null) {
+        continue;
+      }
+      final seg = Seg(
+        v1: level.vertices[v1index],
+        v2: level.vertices[v2index],
+        linedef: linedef,
+        sidedef: sidedef,
+      );
+      seg.angle = byteData.getInt16(i + 4, Endian.little) * pi / 32768;
+      seg.offset = byteData.getInt16(i + 10, Endian.little) as double;
+      segs.add(seg);
+    }
+  }
+
+  final nodes = <Node>[];
+  final subsectors = <Subsector>[];
+  final segs = <Seg>[];
+  final vertices = <Vertex>[];
+
+  final _subsectorsBuilding = <Subsector?>[];
+  final _segsBuilding = <Seg?>[];
+
+  int nanoSegIndex = 0;
+}
 
 class Seg {
   Seg({
@@ -73,9 +224,13 @@ class Seg {
 }
 
 class Subsector {
+  Subsector({
+    required this.firstline,
+  });
+  
   int numlines = 0;
-  int firstline = 0;
-  Sector? sector;
+  Seg firstline;
+  Sector get sector => firstline.sidedef.sector;
 }
 
 class Node {
@@ -106,15 +261,6 @@ class Nanode {
 
   // right and left children
   Nanode? right, left;
-}
-
-class BSP {
-  final nodes = <Node>[];
-  final subsectors = <Subsector>[];
-  final segs = <Seg?>[];  // IOANCH: optional because of technicality
-  final vertices = <Vertex>[];
-
-  int nanoSegIndex = 0;
 }
 
 void _calcOffset(Seg seg) {
@@ -545,19 +691,18 @@ void _countStuff(Nanode N, BSP bsp) {
     N.index = bsp.nodes.length;
     bsp.nodes.add(Node());
   } else {
-    N.index = bsp.subsectors.length;
-    bsp.subsectors.add(Subsector());
+    N.index = bsp._subsectorsBuilding.length;
+    bsp._subsectorsBuilding.add(null);
     for(Seg? seg = N.segs; seg != null; seg = seg.next) {
-      bsp.segs.add(null);
+      bsp._segsBuilding.add(null);
     }
   }
 }
 
 void _writeSubsector(Nanode N, BSP bsp) {
-  Subsector out = bsp.subsectors[N.index];
-  out.numlines = 0;
-  out.firstline = bsp.nanoSegIndex;
-  out.sector = null;  // TODO: determine
+
+  var numlines = 0;
+  final firstline = bsp.nanoSegIndex;
 
   while(N.segs != null) {
     final seg = N.segs!;
@@ -567,12 +712,16 @@ void _writeSubsector(Nanode N, BSP bsp) {
     seg.next = null;
 
     // copy and free it
-    bsp.segs[bsp.nanoSegIndex] = Seg(v1: seg.v1, v2: seg.v2, sidedef: seg.sidedef, linedef: seg.linedef);
-    bsp.segs[bsp.nanoSegIndex]!.copyFrom(seg);
+    bsp._segsBuilding[bsp.nanoSegIndex] = Seg(v1: seg.v1, v2: seg.v2, sidedef: seg.sidedef, linedef: seg.linedef);
+    bsp._segsBuilding[bsp.nanoSegIndex]!.copyFrom(seg);
 
     bsp.nanoSegIndex++;
-    out.numlines++;
+    numlines++;
   }
+
+  final out = Subsector(firstline: bsp._segsBuilding[firstline]!);
+  bsp._subsectorsBuilding[N.index] = out;
+  out.numlines = numlines;
 }
 
 int _writeNode(Nanode N, BBox bbox, BSP bsp) {
@@ -604,5 +753,7 @@ BSP bspBuildNodes(Level level) {
   
   _countStuff(root, bsp);
   _writeNode(root, BBox(), bsp);
+  bsp._finalizeBuilding();
+
   return bsp;
 }

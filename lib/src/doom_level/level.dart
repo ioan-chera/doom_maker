@@ -1,13 +1,15 @@
+import 'bsp.dart';
 import 'dart:typed_data';
 import '../wad_data.dart';
 import 'element.dart';
 
 class Level {
-  var things = <Thing>[];
-  var vertices = <Vertex>[];
-  var sectors = <Sector>[];
-  var sidedefs = <Sidedef>[];
-  var linedefs = <Linedef>[];
+  final things = <Thing>[];
+  final vertices = <Vertex>[];
+  final sectors = <Sector>[];
+  final sidedefs = <Sidedef>[];
+  final linedefs = <Linedef>[];
+  final bsp = BSP();
 
   Level();
 
@@ -27,8 +29,9 @@ class Level {
     _loadSectors(wadData, levelIndex + 8);
     _loadSidedefs(wadData, levelIndex + 3);
     _loadLinedefs(wadData, levelIndex + 2);
-  
-    _cleanupUnusedVertices();
+
+    bsp.loadFromWad(wadData, levelIndex, this);
+    bsp.takeBSPVertices(this);
   }
 
   void _loadThings(WadData wadData, int lumpIndex) {
@@ -166,15 +169,5 @@ class Level {
     final nullIndex = nameBytes.indexOf(0);
     final actualNameBytes = nullIndex >= 0 ? nameBytes.sublist(0, nullIndex) : nameBytes;
     return String.fromCharCodes(actualNameBytes);
-  }
-
-  void _cleanupUnusedVertices() {
-    for (int i = vertices.length - 1; i >= 0; i--) {
-      if (vertices[i].linedefs.isNotEmpty) {
-        break;
-      }
-
-      vertices.removeAt(i);
-    }
   }
 }
