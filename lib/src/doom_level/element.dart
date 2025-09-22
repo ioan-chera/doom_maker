@@ -7,8 +7,8 @@ class Thing {
 }
 
 class Vertex {
-  int x = 0;
-  int y = 0;
+  double x = 0;
+  double y = 0;
 
   Set<Linedef> get linedefs => Set.unmodifiable(_linedefs);
 
