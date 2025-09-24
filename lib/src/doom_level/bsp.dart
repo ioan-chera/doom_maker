@@ -39,19 +39,97 @@ import '../wad_data.dart';
 // this value is a trade-off.  lower values will build nodes faster,
 // but higher values allow picking better BSP partitions (and hence
 // produce better BSP trees).
-const fastThreshold = 128;
-const distEpsilon = 1.0 / 64;
-const splitCost = 11;
-const subsectorMark = 32768;
+const _fastThreshold = 128;
+const _distEpsilon = 1.0 / 64;
+const _splitCost = 11;
+const _subsectorMark = 32768;
+
+typedef _RawSeg = ({ int v1, int v2, int ang, int line, int dir, int ofs });
+
+_RawSeg _readRawSeg(ByteData data) {
+  return (
+    v1: data.getInt16(0, Endian.little),
+    v2: data.getInt16(2, Endian.little),
+    ang: data.getInt16(4, Endian.little),
+    line: data.getInt16(6, Endian.little),
+    dir: data.getInt16(8, Endian.little),
+    ofs: data.getInt16(10, Endian.little),
+  );
+}
+
+typedef _RawSubsector = ({ int count, int first });
+
+_RawSubsector _readRawSubsector(ByteData data) {
+  return (count: data.getInt16(0, Endian.little), first: data.getInt16(2, Endian.little));
+}
+
+typedef _RawNode = ({
+  double x, double y, double dx, double dy, BBox boxRight, BBox boxLeft, int childRight, int childLeft
+});
+
+_RawNode _readRawNode(ByteData byteData) {
+  const i = 0;
+  return (
+    x: byteData.getInt16(i, Endian.little) as double,
+    y: byteData.getInt16(i + 2, Endian.little) as double,
+    dx: byteData.getInt16(i + 4, Endian.little) as double,
+    dy: byteData.getInt16(i + 6, Endian.little) as double,
+    boxRight: BBox(
+      byteData.getInt16(i + 12, Endian.little) as double,
+      byteData.getInt16(i + 10, Endian.little) as double,
+      byteData.getInt16(i + 14, Endian.little) as double,
+      byteData.getInt16(i + 8, Endian.little) as double,
+    ),
+    boxLeft: BBox(
+      byteData.getInt16(i + 20, Endian.little) as double,
+      byteData.getInt16(i + 18, Endian.little) as double,
+      byteData.getInt16(i + 22, Endian.little) as double,
+      byteData.getInt16(i + 16, Endian.little) as double,
+    ),
+    childRight: byteData.getInt16(i + 24, Endian.little),
+    childLeft: byteData.getInt16(i + 26, Endian.little),
+  );
+}
 
 class BSP {
   void loadFromWad(WadData wadData, int levelIndex, Level level) {
-    _loadNodes(wadData, levelIndex + 7);
-    _loadSegs(wadData, levelIndex + 5, level);
-    _loadSubsectors(wadData, levelIndex + 6);
+    final (segsLumpIndex, subsectorsLumpIndex, nodesLumpIndex) = (levelIndex + 5, levelIndex + 6, levelIndex + 7);
+    if(nodesLumpIndex >= wadData.lumps.length) {
+      return;
+    }
+    if(wadData.lumps[segsLumpIndex].name != 'SEGS' || 
+       wadData.lumps[subsectorsLumpIndex].name != 'SSECTORS' ||
+       wadData.lumps[nodesLumpIndex].name != 'NODES')
+    {
+      return;
+    }
+
+    final (segLen, subsectorLen, nodeLen) = (12, 4, 28);
+
+    final (numSegs, numSubsectors, numNodes) = (
+      wadData.lumps[segsLumpIndex].data.length ~/ segLen,
+      wadData.lumps[subsectorsLumpIndex].data.length ~/ subsectorLen,
+      wadData.lumps[nodesLumpIndex].data.length ~/ nodeLen
+    );
+
+    final (rawSegs, rawSubsectors, rawNodes) = (<_RawSeg>[], <_RawSubsector>[], <_RawNode>[]);
+    for(int i = 0; i < numSegs; ++i) {
+      rawSegs.add(_readRawSeg(ByteData.sublistView(wadData.lumps[segsLumpIndex].data, i * segLen, segLen)));
+    }
+    for(int i = 0; i < numSubsectors; ++i) {
+      rawSubsectors.add(_readRawSubsector(
+        ByteData.sublistView(wadData.lumps[subsectorsLumpIndex].data, i * subsectorLen, subsectorLen)
+      ));
+    }
+    for(int i = 0; i < numNodes; ++i) {
+      rawNodes.add(_readRawNode(ByteData.sublistView(wadData.lumps[nodesLumpIndex].data, i * nodeLen, nodeLen)));
+    }
+
+    root = _processRawNode(rawSegs, rawSubsectors, rawNodes, rawNodes.length - 1, level, <int>{});
+    _takeBSPVertices(level);
   }
 
-  void takeBSPVertices(Level level) {
+  void _takeBSPVertices(Level level) {
     int lastUsedVertexIndex = -1;
     for(int i = level.vertices.length - 1; i >= 0; i--) {
       if(level.vertices[i].linedefs.isNotEmpty) {
@@ -66,131 +144,102 @@ class BSP {
     }
   }
 
-  Sector sectorAtPoint(double x, double y) {
-    // TODO: traverse BSP to find the sector
+  Seg? _processRawSeg(_RawSeg rawSeg, Level level) {
+    if(rawSeg.v1 < 0 || rawSeg.v1 >= level.vertices.length || rawSeg.v2 < 0 || rawSeg.v2 >= level.vertices.length ||
+       rawSeg.line < 0 || rawSeg.line >= level.linedefs.length)
+    {
+      return null;
+    }
+    final linedef = level.linedefs[rawSeg.line];
+    final sidedef = rawSeg.dir == 0 ? linedef.sidedef1 : linedef.sidedef2;
+    if(sidedef == null) {
+      return null;
+    }
+    final seg = Seg(
+      v1: level.vertices[rawSeg.v1],
+      v2: level.vertices[rawSeg.v2],
+      linedef: linedef,
+      sidedef: sidedef,
+    );
+    seg.angle = pi * (rawSeg.ang / 32768);
+    seg.offset = rawSeg.ofs as double;
+    return seg;
   }
 
-  void _finalizeBuilding() {
-    segs.clear();
-    for(final seg in _segsBuilding) {
-      segs.add(seg!);
+  Subsector? _processRawSubsector(_RawSubsector rawSubsector, List<_RawSeg> rawSegs, Level level) {
+    if(rawSubsector.count <= 0) {
+      return null;
     }
-    _segsBuilding.clear();
-
-    subsectors.clear();
-    for(final subsector in _subsectorsBuilding) {
-      subsectors.add(subsector!);
+    if(rawSubsector.first < 0 || rawSubsector.first + rawSubsector.count > rawSegs.length) {
+      return null;
     }
-    _subsectorsBuilding.clear();
-  }
-
-  void _loadNodes(WadData wadData, int lumpIndex) {
-    if(lumpIndex >= wadData.lumps.length) {
-      return;
-    }
-    final lump = wadData.lumps[lumpIndex];
-    if (lump.name != 'NODES') {
-      return;
-    }
-
-    final data = lump.data;
-    final byteData = ByteData.sublistView(data);
-
-    for(int i = 0; i + 28 <= data.length; i += 28) {
-      final node = Node();
-      node.x = byteData.getInt16(i, Endian.little) as double;
-      node.y = byteData.getInt16(i + 2, Endian.little) as double;
-      node.dx = byteData.getInt16(i + 4, Endian.little) as double;
-      node.dy = byteData.getInt16(i + 6, Endian.little) as double;
-      node.bbox = [BBox(), BBox()];
-      node.bbox[0].top = byteData.getInt16(i + 8, Endian.little) as double;
-      node.bbox[0].bottom = byteData.getInt16(i + 10, Endian.little) as double;
-      node.bbox[0].left = byteData.getInt16(i + 12, Endian.little) as double;
-      node.bbox[0].right = byteData.getInt16(i + 14, Endian.little) as double;
-      node.bbox[1].top = byteData.getInt16(i + 16, Endian.little) as double;
-      node.bbox[1].bottom = byteData.getInt16(i + 18, Endian.little) as double;
-      node.bbox[1].left = byteData.getInt16(i + 20, Endian.little) as double;
-      node.bbox[1].right = byteData.getInt16(i + 22, Endian.little) as double;
-      node.children = [
-        byteData.getInt16(i + 24, Endian.little),
-        byteData.getInt16(i + 26, Endian.little),
-      ];
-      nodes.add(node);
-    }
-  }
-
-  void _loadSubsectors(WadData wadData, int lumpIndex) {
-    if(lumpIndex >= wadData.lumps.length) {
-      return;
-    }
-    final lump = wadData.lumps[lumpIndex];
-    if (lump.name != 'SSECTORS') {
-      return;
-    }
-
-    final data = lump.data;
-    final byteData = ByteData.sublistView(data);
-
-    for(int i = 0; i + 4 <= data.length; i += 4) {
-      final segIndex = byteData.getInt16(i + 2, Endian.little);
-      final numLines = byteData.getInt16(i, Endian.little);
-      if(segIndex < 0 || segIndex >= segs.length || segIndex + numLines > segs.length) {
-        continue;
+    final subsector = Subsector();
+    for(int i = 0; i < rawSubsector.count; ++i) {
+      final seg = _processRawSeg(rawSegs[rawSubsector.first + i], level);
+      if(seg != null) {
+        subsector.segs.add(seg);
       }
-      final subsector = Subsector(firstline: segs[segIndex]);
-      subsector.numlines = byteData.getInt16(i, Endian.little);
-      subsectors.add(subsector);
     }
+    if(subsector.segs.isEmpty) {
+      return null;
+    }
+    return subsector;
   }
 
-  void _loadSegs(WadData wadData, int lumpIndex, Level level) {
-    if(lumpIndex >= wadData.lumps.length) {
-      return;
+  Node? _processRawNode(
+    List<_RawSeg> rawSegs, 
+    List<_RawSubsector> rawSubsectors, 
+    List<_RawNode> rawNodes, 
+    int nodeIndex,
+    Level level,
+    Set<int> visited
+  ) {
+    // Recursion protection
+    if(visited.contains(nodeIndex)) {
+      return null;
     }
-    final lump = wadData.lumps[lumpIndex];
-    if (lump.name != 'SEGS') {
-      return;
+    visited.add(nodeIndex);
+    final item = rawNodes[nodeIndex];
+    final GenericNode? right, left;
+    if(item.childRight & _subsectorMark != 0) {
+      final subsectorIndex = item.childRight & ~_subsectorMark;
+      if(subsectorIndex < 0 || subsectorIndex >= rawSubsectors.length) {
+        return null; // invalid, can't go further
+      }
+      right = _processRawSubsector(rawSubsectors[subsectorIndex], rawSegs, level);
+    } else {
+      if(item.childRight < 0 || item.childRight >= rawNodes.length) {
+        return null;
+      }
+      right = _processRawNode(rawSegs, rawSubsectors, rawNodes, item.childRight, level, visited);
+    }
+    if(item.childLeft & _subsectorMark != 0) {
+      final subsectorIndex = item.childLeft & ~_subsectorMark;
+      if(subsectorIndex < 0 || subsectorIndex >= rawSubsectors.length) {
+        return null; // invalid, can't go further
+      }
+      left = _processRawSubsector(rawSubsectors[subsectorIndex], rawSegs, level);
+    } else {
+      if(item.childLeft < 0 || item.childLeft >= rawNodes.length) {
+        return null;
+      }
+      left = _processRawNode(rawSegs, rawSubsectors, rawNodes, item.childLeft, level, visited);
+    }
+    if(left == null || right == null) {
+      return null;
     }
 
-    final data = lump.data;
-    final byteData = ByteData.sublistView(data);
-    for(int i = 0; i + 12 <= data.length; i += 12) {
-      final v1index = byteData.getInt16(i, Endian.little);
-      final v2index = byteData.getInt16(i + 2, Endian.little);
-      final lineindex = byteData.getInt16(i + 6, Endian.little);
-      final direction = byteData.getInt16(i + 8, Endian.little);
-      if(v1index < 0 || v1index >= level.vertices.length ||
-         v2index < 0 || v2index >= level.vertices.length ||
-         lineindex < 0 || lineindex >= level.vertices.length) 
-      {
-        continue;
-      }
-      final linedef = level.linedefs[lineindex];
-      final sidedef = direction == 0 ? linedef.sidedef1 : linedef.sidedef2;
-      if(sidedef == null) {
-        continue;
-      }
-      final seg = Seg(
-        v1: level.vertices[v1index],
-        v2: level.vertices[v2index],
-        linedef: linedef,
-        sidedef: sidedef,
-      );
-      seg.angle = byteData.getInt16(i + 4, Endian.little) * pi / 32768;
-      seg.offset = byteData.getInt16(i + 10, Endian.little) as double;
-      segs.add(seg);
-    }
+    final node = Node(children: (right: right, left: left));
+    node.x = item.x;
+    node.y = item.y;
+    node.dx = item.dx;
+    node.dy = item.dy;
+    node.bbox = (right: item.boxRight, left: item.boxLeft);
+    return node;
   }
 
-  final nodes = <Node>[];
-  final subsectors = <Subsector>[];
-  final segs = <Seg>[];
+  GenericNode? root;
   final vertices = <Vertex>[];
-
-  final _subsectorsBuilding = <Subsector?>[];
-  final _segsBuilding = <Seg?>[];
-
-  int nanoSegIndex = 0;
 }
 
 class Seg {
@@ -208,8 +257,6 @@ class Seg {
     linedef = other.linedef;
     angle = other.angle;
     offset = other.offset;
-    frontsector = other.frontsector;
-    backsector = other.backsector;
     next = other.next;
   }
 
@@ -218,49 +265,82 @@ class Seg {
   Linedef linedef;
   double angle = 0;
   double offset = 0;
-  Sector? frontsector, backsector;
 
   Seg? next;
 }
 
-class Subsector {
-  Subsector({
-    required this.firstline,
-  });
-  
-  int numlines = 0;
-  Seg firstline;
-  Sector get sector => firstline.sidedef.sector;
+sealed class GenericNode {}
+
+class Subsector extends GenericNode {
+  final segs = <Seg>[];
+  Sector get sector => segs[0].sidedef.sector;
 }
 
-class Node {
+class Node extends GenericNode {
+  Node({ required this.children });
+
   double x = 0;
   double y = 0;
   double dx = 0;
   double dy = 0;
-  List<int> children = [0, 0];
-  List<BBox> bbox = [BBox(), BBox()];
+  ({GenericNode right, GenericNode left}) children;
+  var bbox = (right: BBox(), left: BBox());
 }
 
 class BBox {
-  double left = double.infinity;
-  double bottom = double.infinity;
-  double right = double.negativeInfinity;
-  double top = double.negativeInfinity;
+  BBox([
+    this.left = double.infinity, 
+    this.bottom = double.infinity, 
+    this.right = double.negativeInfinity, 
+    this.top = double.negativeInfinity
+  ]);
+
+  void addPoint(double x, double y) {
+    left = min(left, x);
+    bottom = min(bottom, y);
+    right = max(right, x);
+    top = max(top, y);
+  }
+
+  (double, double) center() {
+    return ((left + right) / 2, (bottom + top) / 2);
+  }
+
+  static BBox merge(BBox box1, BBox box2) {
+    var out = BBox();
+    out.left = min(box1.left, box2.left);
+    out.bottom = min(box1.bottom, box2.bottom);
+    out.right = max(box1.right, box2.right);
+    out.top = max(box1.top, box2.top);
+    return out;
+  }
+
+  double left;
+  double bottom;
+  double right;
+  double top;
 }
 
-class Nanode {
+BSP bspBuildNodes(Level level) {
+  final Seg? list = _createSegs(level);
+  final bsp = BSP();
+  final _Nanode root = _subdivideSegs(list, bsp);
+
+  final (finalRoot, box) = _writeNode(root, bsp);
+  bsp.root = finalRoot;
+  
+  return bsp;
+}
+
+class _Nanode {
   // when non-null, this is actually a leaf of the BSP tree
   Seg? segs;
-
-  // final index number of this node / leaf
-	int  index = -1;
 
   // partition line (start coord, delta to end)
   double x = 0, y = 0, dx = 0, dy = 0;
 
   // right and left children
-  Nanode? right, left;
+  _Nanode? right, left;
 }
 
 void _calcOffset(Seg seg) {
@@ -283,26 +363,10 @@ void _calcOffset(Seg seg) {
 BBox _boundingBox(Seg? soup) {
   var bbox = BBox();
   for(Seg? S = soup; S != null; S = S.next) {
-    bbox.left = min(bbox.left, S.v1.x);
-    bbox.left = min(bbox.left, S.v2.x);
-    bbox.bottom = min(bbox.bottom, S.v1.y);
-    bbox.bottom = min(bbox.bottom, S.v2.y);
-
-    bbox.right = max(bbox.right, S.v1.x);
-    bbox.right = max(bbox.right, S.v2.x);
-    bbox.top = max(bbox.top, S.v1.y);
-    bbox.top = max(bbox.top, S.v2.y);
+    bbox.addPoint(S.v1.x, S.v1.y);
+    bbox.addPoint(S.v2.x, S.v2.y);
   }
   return bbox;
-}
-
-BBox _mergeBounds(BBox box1, BBox box2) {
-  var out = BBox();
-  out.left = min(box1.left, box2.left);
-  out.bottom = min(box1.bottom, box2.bottom);
-  out.right = max(box1.right, box2.right);
-  out.top = max(box1.top, box2.top);
-  return out;
 }
 
 Seg? _segForLineSide(Level level, int i, int side, Seg? listVar) {
@@ -318,8 +382,6 @@ Seg? _segForLineSide(Level level, int i, int side, Seg? listVar) {
     linedef: ld,
   );
   seg.angle = atan2(seg.v2.y - seg.v1.y, seg.v2.x - seg.v1.x);
-  seg.frontsector = side == 1 ? ld.sidedef2?.sector : ld.sidedef1?.sector;
-  seg.backsector = side == 1 ? ld.sidedef1?.sector : ld.sidedef2?.sector;
 
   _calcOffset(seg);
 
@@ -337,41 +399,41 @@ Seg? _createSegs(Level level) {
   return list;
 }
 
-Nanode _createLeaf(Seg? soup) {
-  var node = Nanode();
+_Nanode _createLeaf(Seg? soup) {
+  var node = _Nanode();
   node.segs = soup;
   return node;
 }
 
 //----------------------------------------------------------------------------
 
-class NodeEval {
+class _NodeEval {
   int left = 0;
   int right = 0;
   int split = 0;
 }
 
-int _pointOnSide(Seg part, double x, double y) {
-  x -= part.v1.x;
-  y -= part.v1.y;
+int _pointOnSide(double x1, double y1, double x2, double y2, double x, double y) {
+  x -= x1;
+  y -= y1;
 
-  final dx = part.v2.x - part.v1.x;
-  final dy = part.v2.y - part.v1.y;
+  final dx = x2 - x1;
+  final dy = y2 - y1;
 
   if(dx == 0) {
-    if(x < -distEpsilon) {
+    if(x < -_distEpsilon) {
       return dy < 0 ? 1 : -1;
     }
-    if(x > distEpsilon) {
+    if(x > _distEpsilon) {
       return dy > 0 ? 1 : -1;
     }
     return 0;
   }
   if(dy == 0) {
-    if(y < -distEpsilon) { 
+    if(y < -_distEpsilon) { 
       return dx > 0 ? 1 : -1;
     }
-    if(y > distEpsilon) {
+    if(y > _distEpsilon) {
       return dx < 0 ? 1 : -1;
     }
     return 0;
@@ -383,23 +445,27 @@ int _pointOnSide(Seg part, double x, double y) {
   if(dx.abs() >= dy.abs()) {
     final slope = dy / dx;
     y -= x * slope;
-    if(y < -distEpsilon) {
+    if(y < -_distEpsilon) {
       return dx > 0 ? 1 : -1;
     }
-    if(y > distEpsilon) {
+    if(y > _distEpsilon) {
       return dx < 0 ? 1 : -1;
     }
   } else {
     final slope = dx / dy;
     x -= y * slope;
-    if(x < -distEpsilon) { 
+    if(x < -_distEpsilon) { 
       return dy < 0 ? 1 : -1;
     }
-    if(x > distEpsilon) {
+    if(x > _distEpsilon) {
       return dy > 0 ? 1 : -1;
     }
   }
   return 0;
+}
+
+int _pointOnSegSide(Seg part, double x, double y) {
+  return _pointOnSide(part.v1.x, part.v1.y, part.v2.x, part.v2.y, x, y);
 }
 
 bool _sameDirection(Seg part, Seg seg) {
@@ -415,8 +481,8 @@ int _segOnSide(Seg part, Seg seg) {
   if(seg == part) {
     return 1;
   }
-  final side1 = _pointOnSide(part, seg.v1.x, seg.v1.y);
-  final side2 = _pointOnSide(part, seg.v2.x, seg.v2.y);
+  final side1 = _pointOnSegSide(part, seg.v1.x, seg.v1.y);
+  final side2 = _pointOnSegSide(part, seg.v2.x, seg.v2.y);
 
   // colinear?
   if(side1 == 0 && side2 == 0) {
@@ -434,11 +500,11 @@ int _segOnSide(Seg part, Seg seg) {
 // Evaluate a seg as a partition candidate, storing the results in `eval`.
 // returns true if the partition is viable, false otherwise.
 //
-(bool, NodeEval) _evalPartition(Seg part, Seg? soup) {
-  var eval = NodeEval();
+(bool, _NodeEval) _evalPartition(Seg part, Seg? soup) {
+  var eval = _NodeEval();
 
-  if((part.v2.x - part.v1.x).abs() < 4 * distEpsilon &&
-     (part.v2.y - part.v1.y).abs() < 4 * distEpsilon)
+  if((part.v2.x - part.v1.x).abs() < 4 * _distEpsilon &&
+     (part.v2.y - part.v1.y).abs() < 4 * _distEpsilon)
   {
     return (false, eval);
   }
@@ -458,76 +524,75 @@ int _segOnSide(Seg part, Seg seg) {
   // a viable partition either splits something, or has other segs
 	// lying on *both* the left and right sides.
 
-  return (eval.split > 0 || (eval.left >0 && eval.right > 0), eval);
+  return (eval.split > 0 || (eval.left > 0 && eval.right > 0), eval);
 }
 
-Seg? _pickNode_Fast(Seg? soup) {
+Seg? _pickNodeFast(Seg? soup) {
   // use slower method when number of segs is below a threshold
   int count = 0;
   for(Seg? S = soup; S != null; S = S.next) {
     count++;
   }
-  if(count < fastThreshold) {
+  if(count < _fastThreshold) {
     return null;
   }
 
   // determine bounding box of the segs
   final bbox = _boundingBox(soup);
 
-  double mid_x = bbox.left / 2 + bbox.right / 2;
-  double mid_y = bbox.bottom / 2 + bbox.top / 2;
+  final (midX, midY) = bbox.center();
 
-  Seg? vert_part;
-  double vert_dist = 16384;
+  Seg? vertPart;
+  double vertDist = 16384;
 
-  Seg? horiz_part;
-  double horiz_dist = 16384;
+  Seg? horizPart;
+  double horizDist = 16384;
 
   // find the seg closest to the middle of the bbox
   for(Seg? part = soup; part != null; part = part.next) {
     if(part.v1.x == part.v2.x) {
-      double dist = (part.v1.x - mid_x).abs();
-      if(dist < vert_dist) {
-        vert_part = part;
-        vert_dist = dist;
+      double dist = (part.v1.x - midX).abs();
+      if(dist < vertDist) {
+        vertPart = part;
+        vertDist = dist;
       }
     } else if(part.v1.y == part.v2.y) {
-      double dist = (part.v1.y - mid_y).abs();
-      if(dist < horiz_dist) {
-        horiz_part = part;
-        horiz_dist = dist;
+      double dist = (part.v1.y - midY).abs();
+      if(dist < horizDist) {
+        horizPart = part;
+        horizDist = dist;
       }
     }
   }
 
   // check that each partition is viable
-  NodeEval v_eval;
-  NodeEval h_eval;
+  _NodeEval vEval;
+  _NodeEval hEval;
 
-  bool vert_ok, horiz_ok;
-  if(vert_part != null) {
-    (vert_ok, v_eval) = _evalPartition(vert_part, soup);
+  bool vertOK, horizOK;
+  if(vertPart != null) {
+    (vertOK, vEval) = _evalPartition(vertPart, soup);
   } else {
-    (vert_ok, v_eval) = (false, NodeEval());
+    (vertOK, vEval) = (false, _NodeEval());
   }
-  if(horiz_part != null) {
-    (horiz_ok, h_eval) = _evalPartition(horiz_part, soup);
+  if(horizPart != null) {
+    (horizOK, hEval) = _evalPartition(horizPart, soup);
   } else {
-    (horiz_ok, h_eval) = (false, NodeEval());
+    (horizOK, hEval) = (false, _NodeEval());
   }
 
-  if(vert_ok && horiz_ok) {
-    final vert_cost = (v_eval.left - v_eval.right).abs() * 2 + v_eval.split * splitCost;
-    final horiz_cost = (h_eval.left - h_eval.right).abs() * 2 + h_eval.split * splitCost;
+  if(vertOK && horizOK) {
+    final vertCost = (vEval.left - vEval.right).abs() * 2 + vEval.split * _splitCost;
+    final horizCost = (hEval.left - hEval.right).abs() * 2 + hEval.split * _splitCost;
 
-    return horiz_cost < vert_cost ? horiz_part : vert_part;
+    return horizCost < vertCost ? horizPart : vertPart;
   }
 
-  if(vert_ok) {
-    return vert_part;
+  if(vertOK) {
+    return vertPart;
   }
-  if(horiz_ok) {
-    return horiz_part;
+  if(horizOK) {
+    return horizPart;
   }
   return null;
 }
@@ -537,14 +602,14 @@ Seg? _pickNode_Fast(Seg? soup) {
 // returning the best one, or NULL if none found (which means
 // the remaining segs form a subsector).
 //
-Seg? _pickNode_Slow(Seg? soup) {
+Seg? _pickNodeSlow(Seg? soup) {
   Seg? best;
   int bestCost = 1 << 30;
 
   for(Seg? part = soup; part != null; part = part.next) {
     final (res, eval) = _evalPartition(part, soup);
     if(res) {
-      final cost = (eval.left - eval.right).abs() * 2 + eval.split * splitCost;
+      final cost = (eval.left - eval.right).abs() * 2 + eval.split * _splitCost;
       if(cost < bestCost) {
         best = part;
         bestCost = cost;
@@ -631,14 +696,12 @@ Seg? _pickNode_Slow(Seg? soup) {
     final T = Seg(v1: iv, v2: S.v2, sidedef:S.sidedef, linedef:S.linedef);
     S.v2 = iv;
     T.angle = S.angle;
-    T.frontsector = S.frontsector;
-    T.backsector = S.backsector;
 
     // compute offsets for the split pieces
     _calcOffset(T);
     _calcOffset(S);
 
-    if(_pointOnSide(part, S.v1.x, S.v1.y) < 0) {
+    if(_pointOnSegSide(part, S.v1.x, S.v1.y) < 0) {
       S.next = lefts;
       lefts = S;
       T.next = rights;
@@ -653,12 +716,12 @@ Seg? _pickNode_Slow(Seg? soup) {
   return (lefts, rights);
 }
 
-Nanode _subdivideSegs(Seg? soup, BSP bsp) {
-  final part = _pickNode_Fast(soup) ?? _pickNode_Slow(soup);
+_Nanode _subdivideSegs(Seg? soup, BSP bsp) {
+  final part = _pickNodeFast(soup) ?? _pickNodeSlow(soup);
   if(part == null) {
     return _createLeaf(soup);
   }
-  final N = Nanode();
+  final N = _Nanode();
   N.x = part.v1.x;
   N.y = part.v1.y;
   N.dx = part.v2.x - N.x;
@@ -683,77 +746,25 @@ Nanode _subdivideSegs(Seg? soup, BSP bsp) {
 
 //----------------------------------------------------------------------------
 
-void _countStuff(Nanode N, BSP bsp) {
-  if(N.segs == null) {
-    // must recurse first, to ensure root node gets highest index
-    _countStuff(N.left!, bsp);
-    _countStuff(N.right!, bsp);
-    N.index = bsp.nodes.length;
-    bsp.nodes.add(Node());
-  } else {
-    N.index = bsp._subsectorsBuilding.length;
-    bsp._subsectorsBuilding.add(null);
-    for(Seg? seg = N.segs; seg != null; seg = seg.next) {
-      bsp._segsBuilding.add(null);
-    }
-  }
-}
-
-void _writeSubsector(Nanode N, BSP bsp) {
-
-  var numlines = 0;
-  final firstline = bsp.nanoSegIndex;
-
-  while(N.segs != null) {
-    final seg = N.segs!;
-
-    // unlink this seg from the list
-    N.segs = seg.next;
-    seg.next = null;
-
-    // copy and free it
-    bsp._segsBuilding[bsp.nanoSegIndex] = Seg(v1: seg.v1, v2: seg.v2, sidedef: seg.sidedef, linedef: seg.linedef);
-    bsp._segsBuilding[bsp.nanoSegIndex]!.copyFrom(seg);
-
-    bsp.nanoSegIndex++;
-    numlines++;
-  }
-
-  final out = Subsector(firstline: bsp._segsBuilding[firstline]!);
-  bsp._subsectorsBuilding[N.index] = out;
-  out.numlines = numlines;
-}
-
-int _writeNode(Nanode N, BBox bbox, BSP bsp) {
-  var index = N.index;
-  if(N.segs != null) {
-    index |= subsectorMark;
+(GenericNode, BBox) _writeNode(_Nanode N, BSP bsp) {
+  final BBox bbox;
+  if(N.segs != null) {  // this is a subsector (leaf)
     bbox = _boundingBox(N.segs);
-    _writeSubsector(N, bsp);
-  } else {
-    final Node out = bsp.nodes[N.index];
-    out.x = N.x;
-    out.y = N.y;
-    out.dx = N.dx;
-    out.dy = N.dy;
-
-    for(int c = 0; c < 2; ++c) {
-      final Nanode child = c == 0 ? N.right! : N.left!;
-      out.children[c] = _writeNode(child, out.bbox[c], bsp);
+    final subsector = Subsector();
+    for(Seg? seg = N.segs; seg != null; seg = seg.next) {
+      subsector.segs.add(seg);
     }
-    bbox = _mergeBounds(out.bbox[0], out.bbox[1]);
+    return (subsector, bbox);
   }
-  return index;
-}
+  // node
+  final (rightChild, rightBBox) = _writeNode(N.right!, bsp);
+  final (leftChild, leftBBox) = _writeNode(N.left!, bsp);
 
-BSP bspBuildNodes(Level level) {
-  final Seg? list = _createSegs(level);
-  final bsp = BSP();
-  final Nanode root = _subdivideSegs(list, bsp);
-  
-  _countStuff(root, bsp);
-  _writeNode(root, BBox(), bsp);
-  bsp._finalizeBuilding();
-
-  return bsp;
+  final node = Node(children: (right: rightChild, left: leftChild));
+  node.x = N.x;
+  node.y = N.y;
+  node.dx = N.dx;
+  node.dy = N.dy;
+  node.bbox = (right: rightBBox, left: leftBBox);
+  return (node, BBox.merge(rightBBox, leftBBox));
 }

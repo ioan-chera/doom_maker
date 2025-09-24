@@ -31,7 +31,6 @@ class Level {
     _loadLinedefs(wadData, levelIndex + 2);
 
     bsp.loadFromWad(wadData, levelIndex, this);
-    bsp.takeBSPVertices(this);
   }
 
   void _loadThings(WadData wadData, int lumpIndex) {
